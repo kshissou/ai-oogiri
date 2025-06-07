@@ -57,7 +57,7 @@ def submit():
 
         # GPT-4 大喜利回答
         first_response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[{"role": "user", "content": user_messages}],
             max_tokens=300,
         )
@@ -74,7 +74,7 @@ def submit():
             })
 
         evaluation_response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[{"role": "user", "content": evaluation_content}],
             max_tokens=300,
         )
