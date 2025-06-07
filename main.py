@@ -87,6 +87,7 @@ def submit():
         })
 
     except Exception as e:
+        print("🔥 Error:", e)
         return jsonify({"error": str(e)}), 500
 
 # ✅ 正确绑定端口给 Render
