@@ -48,6 +48,12 @@ def submit():
 
         first_response_text = first_response.choices[0].message.content
 
+        # 👇 加在这里
+        print("📝 User Question:", question)
+        print("🌐 Language:", language)
+        print("🖼️ Image included:", bool(base64_image))
+        print("🤖 GPT Response:", first_response_text)
+
         # Evaluation prompts by language
         if language == 'ja':
             evaluation_prompt = random.choice([
@@ -76,6 +82,8 @@ def submit():
         )
 
         evaluation_text = evaluation_response.choices[0].message.content
+        # 👇 这里也可以加
+        print("🧠 Evaluation:", evaluation_text)
 
         return jsonify({
             "gpt_response": first_response_text,
