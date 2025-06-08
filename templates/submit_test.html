@@ -1,179 +1,179 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI OOGIRI</title>
-  <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      background-color: #f4f4f4;
-      margin: 0;
-      padding: 20px;
-    }
+    <title>AI OOGIRI</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
 
-    h1 {
-      text-align: center;
-      color: #333;
-    }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
 
-    form {
-      max-width: 700px;
-      margin: 20px auto;
-      padding: 10px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
+        form {
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
 
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 16px;
-    }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
 
-    input[type="text"],
-    input[type="file"],
-    select {
-      width: calc(100% - 20px);
-      padding: 10px;
-      margin-bottom: 10px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      box-sizing: border-box;
-    }
+        input[type="text"],
+        input[type="file"],
+        select {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
 
-    input[type="button"] {
-      background-color: #5cb85c;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      margin-bottom: 10px;
-    }
+        input[type="button"] {
+            background-color: #5cb85c;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 10px;
+        }
 
-    input[type="button"]:hover {
-      background-color: #eaeaea;
-    }
+        input[type="button"]:hover {
+            background-color: #eaeaea;
+        }
 
-    #imagePreview img {
-      max-width: 10%;
-      height: auto;
-      display: block;
-      margin: 10px auto;
-    }
+        #imagePreview img {
+            max-width: 10%;
+            height: auto;
+            display: block;
+            margin: 10px auto;
+        }
 
-    #loading {
-      text-align: center;
-      font-size: 20px;
-      margin-top: 20px;
-      display: none;
-    }
-  </style>
+        #loading {
+            text-align: center;
+            font-size: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-  <h1>AI OOGIRI</h1>
-  <form id="submissionForm">
-    <label for="language">Language:</label>
-    <select id="language" name="language">
-      <option value="ja">日本語</option>
-      <option value="zh">中文</option>
-      <option value="en">English</option>
-    </select><br><br>
+    <h1>AI OOGIRI</h1>
+    <form id="submissionForm">
+        <label for="language">言語 / Language:</label>
+        <select id="language" name="language">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+        </select>
 
-    <input type="text" id="question" name="question" placeholder="ここにテキストを入力するか、画像のみを送信する場合は空欄のままにしてください"><br><br>
-    <input type="file" id="imageUpload" name="imageUpload" onchange="previewImage()"><br><br>
-    <input type="button" value="送信" onclick="submitForm()">
-    <input type="button" value="Clear" onclick="clearForm()"><br><br>
-  </form>
+        <input type="text" id="question" name="question" placeholder="ここにテキストを入力するか、画像のみを送信する場合は空欄のままにしてください"><br><br>
+        <input type="file" id="imageUpload" name="imageUpload" onchange="previewImage()"><br><br>
+        <input type="button" value="送信" onclick="submitForm()">
+        <input type="button" value="Clear" onclick="clearForm()"><br><br>
+    </form>
 
-  <div id="imagePreview"></div>
-  <div id="loading">Loading<span id="dots"></span></div>
+    <div id="imagePreview"></div>
+    <div id="loading">Loading<span id="dots"></span></div>
 
-  <h2>Response from GPT:</h2>
-  <div id="gptResponse"></div>
+    <h2>Response from GPT:</h2>
+    <div id="gptResponse"></div>
 
-  <h2>Evaluation:</h2>
-  <div id="evaluation"></div>
+    <h2>Evaluation:</h2>
+    <div id="evaluation"></div>
 
-  <script>
-    var loadingDotsInterval;
+    <script>
+        var loadingDotsInterval;
 
-    function updateLoadingDots() {
-      var dots = document.getElementById("dots");
-      if (dots.innerHTML.length < 6) {
-        dots.innerHTML += ".";
-      } else {
-        dots.innerHTML = "";
-      }
-    }
+        function updateLoadingDots() {
+            var dots = document.getElementById("dots");
+            if (dots.innerHTML.length < 6) {
+                dots.innerHTML += ".";
+            } else {
+                dots.innerHTML = "";
+            }
+        }
 
-    function showLoading() {
-      document.getElementById('loading').style.display = 'block';
-      loadingDotsInterval = setInterval(updateLoadingDots, 500);
-    }
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            loadingDotsInterval = setInterval(updateLoadingDots, 500);
+        }
 
-    function hideLoading() {
-      clearInterval(loadingDotsInterval);
-      document.getElementById('loading').style.display = 'none';
-    }
+        function hideLoading() {
+            clearInterval(loadingDotsInterval);
+            document.getElementById('loading').style.display = 'none';
+        }
 
-    function submitForm() {
-      var question = document.getElementById('question').value;
-      var imageUpload = document.getElementById('imageUpload').files.length;
+        function submitForm() {
+            var question = document.getElementById('question').value;
+            var imageUpload = document.getElementById('imageUpload').files.length;
 
-      if (question.trim() === "" && imageUpload === 0) {
-        alert("Please enter text or upload an image before submitting.");
-        return;
-      }
+            if (question.trim() === "" && imageUpload === 0) {
+                alert("Please enter text or upload an image before submitting.");
+                return;
+            }
 
-      showLoading();
+            showLoading();
 
-      var form = document.getElementById('submissionForm');
-      var formData = new FormData(form);
+            var form = document.getElementById('submissionForm');
+            var formData = new FormData(form);
 
-      fetch('/submit', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        document.getElementById('gptResponse').innerText = data.gpt_response || "No response.";
-        document.getElementById('evaluation').innerText = data.evaluation || "No evaluation.";
-        hideLoading();
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        hideLoading();
-      });
-    }
+            fetch('/submit', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('gptResponse').innerText = data.gpt_response || 'Error';
+                document.getElementById('evaluation').innerText = data.evaluation || 'Error';
+                hideLoading();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                hideLoading();
+            });
+        }
 
-    function clearForm() {
-      document.getElementById('imageUpload').value = '';
-      document.getElementById('imagePreview').innerHTML = '';
-      document.getElementById('question').value = '';
-      document.getElementById('gptResponse').innerText = '';
-      document.getElementById('evaluation').innerText = '';
-    }
+        function clearForm() {
+            document.getElementById('imageUpload').value = '';
+            document.getElementById('imagePreview').innerHTML = '';
+            document.getElementById('question').value = '';
+            document.getElementById('gptResponse').innerText = '';
+            document.getElementById('evaluation').innerText = '';
+        }
 
-    function previewImage() {
-      var preview = document.getElementById('imagePreview');
-      var file = document.getElementById('imageUpload').files[0];
-      var reader = new FileReader();
+        function previewImage() {
+            var preview = document.getElementById('imagePreview');
+            var file = document.getElementById('imageUpload').files[0];
+            var reader = new FileReader();
 
-      reader.onloadend = function () {
-        var img = document.createElement('img');
-        img.src = reader.result;
-        preview.innerHTML = '';
-        preview.appendChild(img);
-      }
+            reader.onloadend = function () {
+                var img = document.createElement('img');
+                img.src = reader.result;
+                preview.innerHTML = '';
+                preview.appendChild(img);
+            }
 
-      if (file) {
-        reader.readAsDataURL(file);
-      } else {
-        preview.innerHTML = 'No image selected';
-      }
-    }
-  </script>
+            if (file) {
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = 'No image selected';
+            }
+        }
+    </script>
 </body>
 </html>
