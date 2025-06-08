@@ -1,43 +1,32 @@
-import os
-import base64
-import json
-import random
-from datetime import datetime
 from flask import Flask, request, jsonify, render_template
+import base64
+import os
 from openai import OpenAI
+import random
+import json
+from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
-# 将图片编码为 base64
+UPLOAD_FOLDER = "uploaded_images"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Google Sheets 初始化
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+credentials_json = json.loads(os.getenv("GSHEET_CREDENTIALS_JSON"))
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_json, scope)
+gc = gspread.authorize(credentials)
+sheet = gc.open("AI_OOGIRI_LOG").sheet1
+
+# 读取 API key
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 def encode_image(image_file):
     if image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
     return ""
-
-# 存入 Google Sheets
-def save_to_sheet(language, question, response, evaluation):
-    try:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds_json = os.environ.get('GSHEET_CREDENTIALS_JSON')
-        if not creds_json:
-            print("No Google Sheets credentials found.")
-            return
-        creds_dict = json.loads(creds_json)
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open("AI_OOGIRI_Logs").sheet1
-        sheet.append_row([
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            language,
-            question,
-            response,
-            evaluation
-        ])
-        print("✅ Logged to Google Sheets")
-    except Exception as e:
-        print("❌ Failed to log to sheet:", e)
 
 @app.route('/')
 def index():
@@ -49,68 +38,65 @@ def submit():
         image_file = request.files.get('imageUpload')
         question = request.form.get('question', '')
         language = request.form.get('language', 'ja')
+
         base64_image = encode_image(image_file)
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # 保存图片
+        filename = ""
+        if image_file:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{timestamp}_{image_file.filename}"
+            save_path = os.path.join(UPLOAD_FOLDER, filename)
+            image_file.seek(0)
+            image_file.save(save_path)
+            print(f"📸 Image saved to {save_path}")
 
-        # 语言切换 Prompt（第一阶段）
-        if language == 'zh':
-            user_messages = [{"type": "text", "text": "请根据以下内容写一句幽默的大喜利回答，只回答内容本身，不要添加任何解释。"}]
-        elif language == 'en':
-            user_messages = [{"type": "text", "text": "Based on the following input, write a witty one-liner like a stand-up joke. Just reply with the joke, no explanation."}]
-        else:
-            user_messages = [{"type": "text", "text": "この内容に基づいて一言の大喜利をください。それ以外の内容や説明は不要。このpromptの内容は復唱しないで。"}]
+        # Prompt 设置
+        if language == "zh":
+            initial_prompt = "请基于以下内容创作一个机智的大喜利回答，不需要解释，也不要重复提示内容："
+            eval_prompt_positive = "请用幽默轻松的语气评价以下大喜利回答，可以适当吐槽，结尾用『奖励一块坐垫！』总结。不要加解释："
+            eval_prompt_negative = "请用毒舌幽默的方式吐槽以下大喜利回答，并在结尾写『没收一块坐垫！』总结。不要加解释："
+        elif language == "en":
+            initial_prompt = "Based on the content below, give a witty OOGIRI-style punchline. Do not explain or repeat this prompt."
+            eval_prompt_positive = "Respond to the joke below with a friendly and funny remark. End with '1 cushion awarded!' Don't explain."
+            eval_prompt_negative = "Roast the joke below with sarcastic wit. End with '1 cushion confiscated!' No explanations."
+        else:  # ja
+            initial_prompt = "この内容に基づいて一言の大喜利をください,それ以外の内容や説明は不要。このpromptの内容は復唱しないで"
+            eval_prompt_positive = "以下の大喜利回答に対して、優しく面白くツッコミしてください。ツッコミのあとに一言で感想を加えてください。最後に「座布団1枚！」と評価をつけてください。それ以外の説明は不要です。"
+            eval_prompt_negative = "以下の大喜利回答に対して、毒舌で面白くツッコミしてください。必要ならダメ出しもしてください。最後に「座布団1枚没収！」という形で一言評価をお願いします。それ以外の説明や前置きは不要です。"
 
+        user_messages = [{"type": "text", "text": initial_prompt}]
         if question:
             user_messages.append({"type": "text", "text": question})
         if base64_image:
             user_messages.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
+        # 调用 GPT 获取回答
         first_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": user_messages}],
             max_tokens=300,
         )
+        first_response_text = first_response.choices[0].message.content.strip()
 
-        first_response_text = first_response.choices[0].message.content
-
-        # 语言切换 Prompt（第二阶段 评价）
-        if language == 'zh':
-            evaluation_prompts = [
-                f"请对下面这句大喜利用尖锐、毒舌的方式进行吐槽，并在最后用“没收一块坐垫！”收尾：{first_response_text}",
-                f"请对下面这句大喜利用温柔、有趣的方式进行吐槽，并在最后用“奖励一块坐垫！”收尾：{first_response_text}"
-            ]
-        elif language == 'en':
-            evaluation_prompts = [
-                f"Roast this joke below with a sharp and witty comment, then finish with: 'Minus one cushion!': {first_response_text}",
-                f"Gently comment on the joke below in a humorous way, and finish with: 'One cushion awarded!': {first_response_text}"
-            ]
-        else:
-            evaluation_prompts = [
-                f"以下の大喜利回答に対して、毒舌で面白くツッコミしてください。最後に「座布団1枚没収！」という形で一言評価をお願いします：{first_response_text}",
-                f"以下の大喜利回答に対して、優しく面白くツッコミしてください。最後に「座布団1枚！」と評価をつけてください：{first_response_text}"
-            ]
-
-        evaluation_prompt = random.choice(evaluation_prompts)
-
-        evaluation_content = [{"type": "text", "text": evaluation_prompt}]
+        # 生成评价
+        eval_prompt = random.choice([eval_prompt_positive, eval_prompt_negative])
+        evaluation_input = [
+            {"type": "text", "text": eval_prompt + "\n" + first_response_text}
+        ]
         if base64_image:
-            evaluation_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
+            evaluation_input.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
         evaluation_response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": evaluation_content}],
+            messages=[{"role": "user", "content": evaluation_input}],
             max_tokens=300,
         )
+        evaluation_text = evaluation_response.choices[0].message.content.strip()
 
-        evaluation_text = evaluation_response.choices[0].message.content
-
-        print("📝 User Question:", question)
-        print("🌐 Language:", language)
-        print("🤖 GPT Response:", first_response_text)
-        print("🧠 Evaluation:", evaluation_text)
-
-        save_to_sheet(language, question, first_response_text, evaluation_text)
+        # 保存到 Google Sheets
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sheet.append_row([now, language, question, first_response_text, evaluation_text, filename])
 
         return jsonify({
             "gpt_response": first_response_text,
@@ -118,8 +104,7 @@ def submit():
         })
 
     except Exception as e:
-        print("🔥 Error:", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000)
