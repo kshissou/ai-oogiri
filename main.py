@@ -23,7 +23,7 @@ credentials_json = json.loads(os.getenv("GSHEET_CREDENTIALS_JSON"))
 # Google Sheets 认证
 credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_json, scope)
 gc = gspread.authorize(credentials)
-sheet = gc.open("AI_OOGIRI_LOG").sheet1
+sheet = gc.open("AI_OOGIRI_Logs").sheet1
 
 # Google Drive 认证
 drive_credentials = service_account.Credentials.from_service_account_info(credentials_json, scopes=scope)
