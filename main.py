@@ -1,26 +1,41 @@
 from flask import Flask, request, jsonify, render_template
 import base64
-from openai import OpenAI
-import random
 import os
-from datetime import datetime
+import io
+import json
+import random
 import logging
+from datetime import datetime
+from openai import OpenAI
 import gspread
 from google.oauth2.service_account import Credentials
-import json
-
-# 初始化日志
-logging.basicConfig(level=logging.INFO)
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import tempfile
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# Google Sheets 授权（通过环境变量）
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# === Google Credentials from environment variable ===
 creds_json = os.getenv("GOOGLE_CREDS_JSON")
-credentials_dict = json.loads(creds_json)
-creds = Credentials.from_service_account_info(credentials_dict, scopes=scope)
+if not creds_json:
+    raise RuntimeError("Missing GOOGLE_CREDS_JSON environment variable")
+
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file"
+]
+
+with tempfile.NamedTemporaryFile(mode='w+', suffix=".json", delete=False) as f:
+    f.write(creds_json)
+    temp_cred_path = f.name
+
+creds = Credentials.from_service_account_file(temp_cred_path, scopes=scope)
 gc = gspread.authorize(creds)
 sheet = gc.open("AI_OOGIRI_Logs").sheet1
+drive_service = build("drive", "v3", credentials=creds)
+DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
 
 def encode_image(image_file):
     if image_file:
@@ -29,6 +44,19 @@ def encode_image(image_file):
         image_file.seek(0)
         return encoded
     return ""
+
+def upload_image_to_drive(image_file, filename):
+    file_metadata = {
+        'name': filename,
+        'parents': [DRIVE_FOLDER_ID]
+    }
+    media = MediaIoBaseUpload(image_file, mimetype='image/jpeg')
+    file = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+    return f"https://drive.google.com/file/d/{file.get('id')}/view?usp=sharing"
 
 @app.route('/')
 def index():
@@ -51,7 +79,7 @@ def submit():
             user_messages.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
         gpt_response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[{"role": "user", "content": user_messages}],
             max_tokens=300,
         ).choices[0].message.content
@@ -72,20 +100,30 @@ def submit():
                 "Kindly and humorously comment on the joke below, then add a short impression. End with 'One cushion for you!' No extra text."
             ])
 
-        evaluation_content = [
-            {"type": "text", "text": evaluation_prompt + "\n" + gpt_response}
-        ]
+        evaluation_messages = [{"type": "text", "text": evaluation_prompt + "\n" + gpt_response}]
         if base64_image:
-            evaluation_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
+            evaluation_messages.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
         evaluation_text = client.chat.completions.create(
-            model="gpt-4-vision-preview",
-            messages=[{"role": "user", "content": evaluation_content}],
+            model="gpt-4o",
+            messages=[{"role": "user", "content": evaluation_messages}],
             max_tokens=300,
         ).choices[0].message.content
 
-        # 写入 Google Sheets
-        sheet.append_row([datetime.now().isoformat(), question, gpt_response, evaluation_text])
+        image_url = ""
+        if image_file:
+            image_file.seek(0)
+            filename = f"oogiri_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            image_url = upload_image_to_drive(image_file, filename)
+            logging.info(f"✅ Uploaded image: {image_url}")
+
+        sheet.append_row([
+            datetime.now().isoformat(),
+            question,
+            gpt_response,
+            evaluation_text,
+            image_url
+        ])
 
         return jsonify({
             "gpt_response": gpt_response,
